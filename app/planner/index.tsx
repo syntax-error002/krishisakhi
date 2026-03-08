@@ -4,9 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CloudRain, RefreshCcw, AlertTriangle } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { Picker } from '@react-native-picker/picker';
-
-// Connected to live production Render backend for hackathon demo
-const API_URL = "https://krishisakhi-n4zi.onrender.com/api/climate/simulate";
+import { API_ENDPOINTS, apiCall } from '../../src/config/api';
 
 export default function PlannerScreen() {
     const [landSize, setLandSize] = useState('5');
@@ -27,25 +25,18 @@ export default function PlannerScreen() {
         setResults(null);
 
         try {
-            const response = await fetch(API_URL, {
+            const data = await apiCall(API_ENDPOINTS.climateSimulate, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     landSize: parseFloat(landSize),
                     currentCrop: currentCrop,
                     scenario: scenario
                 })
             });
-
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-
-            const data = await response.json();
             setResults(data);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            Alert.alert("Connection Error", "Could not connect to the Krishi backend engine.");
+            Alert.alert("Connection Error", error.message || "Could not connect to the Krishi backend engine.");
         } finally {
             setIsLoading(false);
         }

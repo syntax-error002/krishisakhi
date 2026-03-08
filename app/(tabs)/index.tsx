@@ -1,16 +1,63 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CloudRain, CloudSun, Sprout, TrendingUp, Handshake, Users, Landmark, ChevronRight } from 'lucide-react-native';
+import { CloudRain, CloudSun, Sprout, TrendingUp, Handshake, Users, Landmark, ChevronRight, RefreshCw } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
+import { useEffect, useState } from 'react';
+import { API_ENDPOINTS, apiCall } from '../../src/config/api';
+
+interface WeatherData {
+  location: string;
+  temperature: number;
+  condition: string;
+  humidityPercent: number;
+  rainChancePercent: number;
+  recommendation: string;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [loadingWeather, setLoadingWeather] = useState(true);
 
   const displayName = userProfile?.name || 'Farmer';
   const initials = displayName.substring(0, 2).toUpperCase();
+  const location = userProfile?.location || 'Pune, MH';
+  const mainCrop = userProfile?.mainCrops?.split(',')[0] || 'wheat';
+
+  useEffect(() => {
+    fetchWeather();
+  }, [location, mainCrop]);
+
+  const fetchWeather = async () => {
+    setLoadingWeather(true);
+    try {
+      const data = await apiCall<WeatherData>(API_ENDPOINTS.weather, {
+        method: 'POST',
+        body: JSON.stringify({
+          location: location,
+          farmSize: parseFloat(userProfile?.farmSize || '5'),
+          mainCrop: mainCrop,
+        }),
+      });
+      setWeatherData(data);
+    } catch (error) {
+      console.error('Failed to fetch weather:', error);
+      // Fallback to default data
+      setWeatherData({
+        location: location,
+        temperature: 28,
+        condition: 'Clear',
+        humidityPercent: 65,
+        rainChancePercent: 12,
+        recommendation: 'Weather data unavailable. Check local conditions.',
+      });
+    } finally {
+      setLoadingWeather(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -25,7 +72,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Weather Widget */}
+      {/* Weather Widget - Now with Real Data */}
       <LinearGradient
         colors={[theme.colors.primary, theme.colors.primaryDark]}
         start={{ x: 0, y: 0 }}
@@ -33,23 +80,50 @@ export default function HomeScreen() {
         style={styles.weatherCard}
       >
         <View style={styles.weatherHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.weatherTitle}>Current Weather</Text>
-            <Text style={styles.weatherLocation}>Pune District</Text>
+            <Text style={styles.weatherLocation}>
+              {loadingWeather ? 'Loading...' : weatherData?.location || location}
+            </Text>
           </View>
-          <CloudSun color={theme.colors.surface} size={32} />
+          <TouchableOpacity onPress={fetchWeather} style={{ padding: 4 }}>
+            <RefreshCw 
+              color={theme.colors.surface} 
+              size={20} 
+              style={{ opacity: loadingWeather ? 0.5 : 1 }}
+            />
+          </TouchableOpacity>
+          <CloudSun color={theme.colors.surface} size={32} style={{ marginLeft: 8 }} />
         </View>
-        <View style={styles.weatherDetails}>
-          <Text style={styles.temperature}>28°C</Text>
-          <View style={styles.weatherDivider} />
-          <View style={styles.weatherExtra}>
-            <View style={styles.weatherRow}>
-              <CloudRain color={theme.colors.surface} size={16} />
-              <Text style={styles.weatherText}> 12% Chance of rain</Text>
+        {loadingWeather ? (
+          <View style={styles.weatherLoading}>
+            <ActivityIndicator color={theme.colors.surface} />
+          </View>
+        ) : (
+          <View style={styles.weatherDetails}>
+            <Text style={styles.temperature}>{Math.round(weatherData?.temperature || 28)}°C</Text>
+            <View style={styles.weatherDivider} />
+            <View style={styles.weatherExtra}>
+              <View style={styles.weatherRow}>
+                <CloudRain color={theme.colors.surface} size={16} />
+                <Text style={styles.weatherText}>
+                  {weatherData?.rainChancePercent || 0}% Chance of rain
+                </Text>
+              </View>
+              <Text style={styles.weatherText}>
+                Humidity: {weatherData?.humidityPercent || 0}%
+              </Text>
+              <Text style={[styles.weatherText, { marginTop: 8, fontSize: 12, opacity: 0.9 }]}>
+                {weatherData?.condition || 'Clear'}
+              </Text>
             </View>
-            <Text style={styles.weatherText}>Humidity: 65%</Text>
           </View>
-        </View>
+        )}
+        {weatherData?.recommendation && (
+          <View style={styles.weatherAdvisory}>
+            <Text style={styles.weatherAdvisoryText}>{weatherData.recommendation}</Text>
+          </View>
+        )}
       </LinearGradient>
 
       {/* Recommended Action */}
@@ -57,8 +131,10 @@ export default function HomeScreen() {
         <LinearGradient colors={['#FFF8E1', '#FFECB3']} style={styles.banner}>
           <View style={styles.bannerContent}>
             <Text style={styles.bannerTitle}>Mandi Prices Updating</Text>
-            <Text style={styles.bannerDesc}>Wheat prices in your local mandi are up by 2% today.</Text>
-            <TouchableOpacity style={styles.bannerButton} onPress={() => router.push('/market')}>
+            <Text style={styles.bannerDesc}>
+              {mainCrop.charAt(0).toUpperCase() + mainCrop.slice(1)} prices in your local mandi are updating in real-time.
+            </Text>
+            <TouchableOpacity style={styles.bannerButton} onPress={() => router.push('/market' as any)}>
               <Text style={styles.bannerButtonText}>Check Rates</Text>
             </TouchableOpacity>
           </View>
@@ -68,7 +144,7 @@ export default function HomeScreen() {
       {/* Main Feature Hub */}
       <Text style={styles.sectionTitle}>Farm Intelligence</Text>
 
-      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/planner')}>
+      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/planner' as any)}>
         <View style={[styles.featureIconBg, { backgroundColor: '#E3F2FD' }]}>
           <TrendingUp color="#1976D2" size={28} />
         </View>
@@ -79,7 +155,7 @@ export default function HomeScreen() {
         <ChevronRight color={theme.colors.textSecondary} size={20} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/crop-rotation')}>
+      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/crop-rotation' as any)}>
         <View style={[styles.featureIconBg, { backgroundColor: '#F3E5F5' }]}>
           <Sprout color="#7B1FA2" size={28} />
         </View>
@@ -92,7 +168,7 @@ export default function HomeScreen() {
 
       <Text style={styles.sectionTitle}>Community & Growth</Text>
 
-      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/mentorship')}>
+      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/mentorship' as any)}>
         <View style={[styles.featureIconBg, { backgroundColor: '#E8F5E9' }]}>
           <Users color="#388E3C" size={28} />
         </View>
@@ -103,13 +179,13 @@ export default function HomeScreen() {
         <ChevronRight color={theme.colors.textSecondary} size={20} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/gov-schemes')}>
+      <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/gov-schemes' as any)}>
         <View style={[styles.featureIconBg, { backgroundColor: '#FFF3E0' }]}>
           <Landmark color="#F57C00" size={28} />
         </View>
         <View style={styles.featureTextContainer}>
           <Text style={styles.featureTitle}>Govt. Scheme Radar</Text>
-          <Text style={styles.featureDesc}>View 6 active subsidies tailored to your profile.</Text>
+          <Text style={styles.featureDesc}>View active subsidies tailored to your profile.</Text>
         </View>
         <ChevronRight color={theme.colors.textSecondary} size={20} />
       </TouchableOpacity>
@@ -180,6 +256,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.h3.fontSize,
     fontWeight: '600',
   },
+  weatherLoading: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
   weatherDetails: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,6 +287,18 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     fontSize: theme.typography.caption.fontSize,
     fontWeight: '500',
+  },
+  weatherAdvisory: {
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  weatherAdvisoryText: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: 'italic',
   },
   sectionTitle: {
     fontSize: 18,
