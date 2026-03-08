@@ -5,8 +5,8 @@ import { CloudRain, RefreshCcw, AlertTriangle } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { Picker } from '@react-native-picker/picker';
 
-// Update this to your local machine's IP address if testing on a physical device
-const API_URL = "http://127.0.0.1:8000/api/climate/simulate";
+// Connected to live production Render backend for hackathon demo
+const API_URL = "https://krishisakhi-n4zi.onrender.com/api/climate/simulate";
 
 export default function PlannerScreen() {
     const [landSize, setLandSize] = useState('5');
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     simulateButton: { marginTop: theme.spacing.sm, borderRadius: theme.borderRadius.md, overflow: 'hidden' },
     simulateGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
     simulateButtonText: { color: theme.colors.surface, fontSize: 16, fontWeight: '700' },
-    resultsContainer: { animation: 'fadeIn 0.5s ease-in-out' },
+    resultsContainer: { marginTop: theme.spacing.md },
     sectionTitle: { fontSize: theme.typography.h3.fontSize, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.md },
     dangerCard: { backgroundColor: '#FFEBEE', borderWidth: 1, borderColor: '#FFCDD2', borderRadius: theme.borderRadius.lg, padding: theme.spacing.lg, marginBottom: theme.spacing.xl },
     dangerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
