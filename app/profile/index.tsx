@@ -42,8 +42,9 @@ export default function ProfileScreen() {
             });
             Alert.alert("Success", "Your farming profile has been updated!");
             router.back();
-        } catch (error) {
-            Alert.alert("Error", "Could not save profile details.");
+        } catch (error: any) {
+            console.log("Save error:", error);
+            Alert.alert("Error", error.message || "Could not save profile details.");
         } finally {
             setIsSaving(false);
         }

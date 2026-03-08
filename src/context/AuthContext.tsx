@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!user) return;
         try {
             const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, newData);
+            await setDoc(userDocRef, newData, { merge: true });
             setUserProfile((prev: any) => ({ ...prev, ...newData }));
         } catch (e) {
             console.error("Error updating profile", e);
