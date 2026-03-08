@@ -4,9 +4,11 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Search, Filter, CheckCircle, Clock, RefreshCcw } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
-import { API_ENDPOINTS, apiCall } from '../../src/config/api';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { db } from '../../src/config/firebase';
 
 interface GovScheme {
+  id?: string;
   name: string;
   description: string;
   tag: string;
@@ -17,45 +19,77 @@ interface GovScheme {
   requiredDocuments: string[];
 }
 
-interface SchemesResponse {
-  profileSummary: string;
-  totalEligibleSchemes: number;
-  topSchemes: GovScheme[];
-}
-
 export default function GovSchemesScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const [schemes, setSchemes] = useState<GovScheme[]>([]);
-  const [profileSummary, setProfileSummary] = useState('');
-  const [totalSchemes, setTotalSchemes] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   const location = userProfile?.location || 'Pune, MH';
   const farmSize = parseFloat(userProfile?.farmSize || '2');
-  const mainCrops = userProfile?.mainCrops?.split(',').map((c) => c.trim()) || ['wheat', 'soybean'];
-  const isSmallOrMarginal = farmSize <= 2;
 
   useEffect(() => {
     fetchSchemes();
-  }, [location, farmSize, mainCrops]);
+  }, []);
+
+  const seedSchemes = async () => {
+    const defaultSchemes: any[] = [
+      {
+        name: 'PM-Kisan Samman Nidhi',
+        description: 'Direct income support of ₹6,000 per year for all landholding farmers.',
+        tag: 'Income Support',
+        status: 'eligible',
+        estimatedBenefitPerYear: 6000,
+        priorityRank: 1,
+        requiredDocuments: ['Aadhar Card', 'Bank Account', 'Land Record']
+      },
+      {
+        name: 'Pradhan Mantri Fasal Bima Yojana',
+        description: 'Crop insurance scheme mitigating risk of crop failure due to natural calamities.',
+        tag: 'Insurance',
+        status: 'pending',
+        estimatedBenefitPerYear: 15000,
+        priorityRank: 2,
+        requiredDocuments: ['Aadhar Card', 'Sowing Certificate']
+      },
+      {
+        name: 'Soil Health Card Scheme',
+        description: 'Provides information on soil nutrient status and recommendations on dosage of nutrients.',
+        tag: 'Soil Health',
+        status: 'warning',
+        estimatedBenefitPerYear: 2000,
+        priorityRank: 3,
+        requiredDocuments: ['Land Record']
+      }
+    ];
+
+    try {
+      for (const scheme of defaultSchemes) {
+        await addDoc(collection(db, 'gov_schemes'), scheme);
+      }
+    } catch (e) {
+      console.log('Seeding error', e);
+    }
+  };
 
   const fetchSchemes = async () => {
     setIsLoading(true);
     try {
-      const data = await apiCall<SchemesResponse>(API_ENDPOINTS.schemes, {
-        method: 'POST',
-        body: JSON.stringify({
-          location: location,
-          farmSize: farmSize,
-          mainCrops: mainCrops,
-          isSmallOrMarginal: isSmallOrMarginal,
-        }),
+      const snapshot = await getDocs(collection(db, 'gov_schemes'));
+
+      if (snapshot.empty) {
+        await seedSchemes();
+        fetchSchemes(); // Re-fetch
+        return;
+      }
+
+      const data: GovScheme[] = [];
+      snapshot.forEach(doc => {
+        data.push({ id: doc.id, ...doc.data() } as GovScheme);
       });
-      setSchemes(data.topSchemes);
-      setProfileSummary(data.profileSummary);
-      setTotalSchemes(data.totalEligibleSchemes);
+      data.sort((a, b) => a.priorityRank - b.priorityRank);
+      setSchemes(data);
     } catch (error: any) {
       console.error('Failed to fetch schemes:', error);
       Alert.alert('Error', error.message || 'Failed to load government schemes.');
@@ -106,11 +140,10 @@ export default function GovSchemesScreen() {
           <Text style={styles.sectionTitle}>Your Eligibility Profile</Text>
           <View style={styles.profileCard}>
             <Text style={styles.profileText}>
-              {profileSummary || `Based on your profile (${farmSize} Acres, ${location}), you are eligible for `}
+              Based on your profile ({farmSize} Acres, {location}), you are eligible for{' '}
               <Text style={{ fontWeight: '800', color: theme.colors.primary }}>
-                {totalSchemes} Govt. Schemes
-              </Text>
-              .
+                {schemes.length} Govt. Schemes
+              </Text>.
             </Text>
           </View>
 
@@ -122,7 +155,7 @@ export default function GovSchemesScreen() {
             </View>
           ) : (
             filteredSchemes.map((scheme, index) => (
-              <View key={index} style={styles.schemeCard}>
+              <View key={scheme.id || index} style={styles.schemeCard}>
                 <View style={styles.schemeHeader}>
                   <Text style={styles.schemeName}>{scheme.name}</Text>
                   {scheme.status === 'eligible' && <CheckCircle color={theme.colors.success} size={20} />}
@@ -136,7 +169,7 @@ export default function GovSchemesScreen() {
                   </Text>
                   <Text style={styles.priorityText}>Priority #{scheme.priorityRank}</Text>
                 </View>
-                {scheme.requiredDocuments.length > 0 && (
+                {scheme.requiredDocuments && scheme.requiredDocuments.length > 0 && (
                   <View style={styles.documentsContainer}>
                     <Text style={styles.documentsTitle}>Required Documents:</Text>
                     {scheme.requiredDocuments.map((doc, idx) => (
