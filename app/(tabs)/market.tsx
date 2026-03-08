@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Search, MapPin, Star, ChevronRight, FileCheck, RefreshCcw, PlusCircle } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../src/config/firebase';
 
 interface MandiPrice {
@@ -40,6 +40,9 @@ export default function MarketScreen() {
   const [postCrop, setPostCrop] = useState('');
   const [postQuantity, setPostQuantity] = useState('');
   const [postPrice, setPostPrice] = useState('');
+
+  // Buy request state
+  const [buyingId, setBuyingId] = useState<string | null>(null);
 
   const location = userProfile?.location || 'Pune City';
 
@@ -123,13 +126,15 @@ export default function MarketScreen() {
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'market_listings'), {
+        userId: userProfile?.uid || '',
         name: userProfile?.name || 'Local Farmer (Self)',
         location: location,
         distanceKm: 0.1,
         rating: 5.0,
         lookingFor: [postCrop],
         priceBand: `₹${postPrice}/kg`,
-        notes: `Offering ${postQuantity}kg. Ready for immediate sale.`
+        notes: `Offering ${postQuantity}kg. Ready for immediate sale.`,
+        createdAt: serverTimestamp(),
       });
       setShowModal(false);
       setPostCrop('');
@@ -142,6 +147,36 @@ export default function MarketScreen() {
       Alert.alert('Error', error.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // ── Send a crop buy request to a listing ──────────────────────────────────
+  const handleSendBuyRequest = async (buyer: BuyerListing) => {
+    if (buyingId) return; // prevent double-tap
+    setBuyingId(buyer.id || buyer.name);
+    try {
+      const { user } = useAuth(); // Need to ensure we use the actual auth user
+      await addDoc(collection(db, 'buy_requests'), {
+        buyerName: buyer.name,
+        buyerId: buyer.id || '',
+        buyerLocation: buyer.location,
+        cropsWanted: buyer.lookingFor,
+        priceBand: buyer.priceBand,
+        farmerName: userProfile?.name || 'Farmer',
+        farmerId: user?.uid || '',
+        farmerLocation: location,
+        message: `${userProfile?.name || 'A farmer'} is interested in selling ${buyer.lookingFor.join(', ')} to you. Please contact them.`,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      Alert.alert(
+        '✅ Request Sent!',
+        `Your interest has been sent to ${buyer.name}. They will contact you soon.`
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to send buy request.');
+    } finally {
+      setBuyingId(null);
     }
   };
 
@@ -297,9 +332,19 @@ export default function MarketScreen() {
 
               <View style={styles.buyerFooter}>
                 <Text style={styles.priceOffer}>{buyer.priceBand}</Text>
-                <TouchableOpacity style={styles.connectButton}>
-                  <FileCheck color={theme.colors.surface} size={16} />
-                  <Text style={styles.connectButtonText}> Send Proposal</Text>
+                <TouchableOpacity
+                  style={[styles.connectButton, buyingId === (buyer.id || buyer.name) && { opacity: 0.6 }]}
+                  onPress={() => handleSendBuyRequest(buyer)}
+                  disabled={buyingId === (buyer.id || buyer.name)}
+                >
+                  {buyingId === (buyer.id || buyer.name) ? (
+                    <ActivityIndicator color={theme.colors.surface} size="small" />
+                  ) : (
+                    <>
+                      <FileCheck color={theme.colors.surface} size={16} />
+                      <Text style={styles.connectButtonText}> Send Buy Request</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

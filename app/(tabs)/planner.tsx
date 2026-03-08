@@ -4,8 +4,12 @@ import {
     ActivityIndicator, Alert, Keyboard, Modal, FlatList, Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CloudRain, RefreshCcw, AlertTriangle, ChevronDown, Search, X, CheckCircle } from 'lucide-react-native';
+import { CloudRain, RefreshCcw, AlertTriangle, ChevronDown, Search, X, CheckCircle, Calendar, Check } from 'lucide-react-native';
 import { theme } from '../../src/theme';
+import { useAuth } from '../../src/context/AuthContext';
+import { db } from '../../src/config/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useRouter } from 'expo-router';
 
 // ── Crop list ──────────────────────────────────────────────────────────────
 const CROPS = [
@@ -215,6 +219,9 @@ export default function PlannerScreen() {
     const [cropPickerVisible, setCropPickerVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<any>(null);
+    const [isAccepting, setIsAccepting] = useState<string | null>(null);
+    const router = useRouter();
+    const { user } = useAuth();
 
     const selectedCrop = CROPS.find(c => c.key === selectedCropKey)!;
     const selectedScenario = SCENARIOS.find(s => s.key === selectedScenarioKey)!;
@@ -232,6 +239,55 @@ export default function PlannerScreen() {
             setResults(res);
             setIsLoading(false);
         }, 1200);
+    };
+
+    const handleAcceptPlan = async (altName: string) => {
+        if (!user) {
+            Alert.alert('Login Required', 'Please login to save your farming plan.');
+            return;
+        }
+
+        setIsAccepting(altName);
+        try {
+            const taskTemplates = [
+                { name: `Sow ${altName}`, daysOffset: 1, desc: 'Proper seed treatment and sowing in prepared soil.' },
+                { name: 'Initial Irrigation', daysOffset: 3, desc: 'Light watering to aid germination.' },
+                { name: 'First Fertilizer Dose', daysOffset: 25, desc: 'N-P-K application based on soil health card.' },
+                { name: 'Weeding & Inter-culture', daysOffset: 45, desc: 'Remove weeds to prevent nutrient competition.' },
+                { name: 'Pest Monitoring', daysOffset: 60, desc: 'Check for early signs of infestation.' },
+                { name: `Harvest ${altName}`, daysOffset: 120, desc: 'Final crop harvesting at physiological maturity.' },
+            ];
+
+            const now = new Date();
+            for (const template of taskTemplates) {
+                const dueDate = new Date(now);
+                dueDate.setDate(now.getDate() + template.daysOffset);
+
+                await addDoc(collection(db, 'farming_tasks'), {
+                    userId: user.uid,
+                    cropName: altName,
+                    taskName: template.name,
+                    description: template.desc,
+                    dueDate: dueDate,
+                    status: 'pending',
+                    createdAt: serverTimestamp(),
+                });
+            }
+
+            Alert.alert(
+                'Plan Activated! 🎉',
+                `A personalized farming calendar for ${altName} has been generated. Check your profile for details.`,
+                [
+                    { text: 'View Calendar', onPress: () => router.push('/calendar') },
+                    { text: 'OK' }
+                ]
+            );
+        } catch (error: any) {
+            console.error('Accept plan error:', error);
+            Alert.alert('Error', 'Failed to generate your calendar. Please try again.');
+        } finally {
+            setIsAccepting(null);
+        }
     };
 
     return (
@@ -344,6 +400,21 @@ export default function PlannerScreen() {
                                     </View>
                                     <Text style={styles.altProfit}>₹{Math.round(alt.profit).toLocaleString()}</Text>
                                 </View>
+                                
+                                <TouchableOpacity 
+                                    style={[styles.acceptBtn, isAccepting === alt.name && { opacity: 0.7 }]}
+                                    onPress={() => handleAcceptPlan(alt.name)}
+                                    disabled={!!isAccepting}
+                                >
+                                    {isAccepting === alt.name ? (
+                                        <ActivityIndicator color={theme.colors.primary} size="small" />
+                                    ) : (
+                                        <>
+                                            <Calendar color={theme.colors.primary} size={16} style={{ marginRight: 6 }} />
+                                            <Text style={styles.acceptBtnText}>Accept & Generate Calendar</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
                             </View>
                         ))}
                     </View>
@@ -403,4 +474,20 @@ const styles = StyleSheet.create({
     resistanceBadge: { backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     resistanceText: { color: '#1565C0', fontSize: 12, fontWeight: '600' },
     altProfit: { fontSize: 16, fontWeight: '800', color: theme.colors.success },
+    acceptBtn: {
+        marginTop: 14,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.primary + '08',
+    },
+    acceptBtnText: {
+        color: theme.colors.primary,
+        fontSize: 14,
+        fontWeight: '700',
+    },
 });

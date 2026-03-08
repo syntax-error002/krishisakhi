@@ -27,5 +27,27 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
     }
+
+    // New collections for the added features
+    match /expert_bookings/{bookingId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.token.admin == true);
+    }
+
+    match /mentorship_schedules/{scheduleId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.farmerId || request.auth.token.admin == true);
+    }
+
+    match /buy_requests/{requestId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.buyerId || request.auth.token.admin == true);
+    }
+
+    match /farming_tasks/{taskId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.token.admin == true);
+    }
   }
 }

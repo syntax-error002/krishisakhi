@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -41,6 +41,27 @@ export default function CropRotationScreen() {
 
   const farmSize = parseFloat(userProfile?.farmSize || '2');
   const location = userProfile?.location || 'Pune, MH';
+
+  const [serverReady, setServerReady] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'warming' | 'ready' | 'error'>('warming');
+
+  // ── Wake up Render server the moment screen opens ───────────────────────
+  useEffect(() => {
+    const wakeUp = async () => {
+      try {
+        const res = await fetch(`${ROTATION_API}/health`, { method: 'GET' });
+        if (res.ok) {
+          setServerReady(true);
+          setServerStatus('ready');
+        } else {
+          setServerStatus('error');
+        }
+      } catch {
+        setServerStatus('error');
+      }
+    };
+    wakeUp();
+  }, []);
 
   const calculateRotation = async () => {
     const crops = [season3, season2, season1].filter(Boolean); // oldest to newest
@@ -129,12 +150,17 @@ export default function CropRotationScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.calcButton, isLoading && { opacity: 0.6 }]}
+          style={[styles.calcButton, (isLoading || serverStatus === 'warming') && { opacity: 0.75 }]}
           onPress={calculateRotation}
           disabled={isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color={theme.colors.surface} />
+          ) : serverStatus === 'warming' ? (
+            <>
+              <ActivityIndicator color={theme.colors.surface} size="small" style={{ marginRight: 8 }} />
+              <Text style={styles.calcButtonText}>Warming Up Server…</Text>
+            </>
           ) : (
             <>
               <RefreshCcw color={theme.colors.surface} size={18} style={{ marginRight: 8 }} />
