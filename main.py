@@ -6,9 +6,9 @@ from app.core.logging_config import setup_logging
 from app.middleware.error_handler import (
     validation_exception_handler,
     http_exception_handler,
-    general_exception_handler
+    general_exception_handler,
 )
-from app.routers import climate, health
+from app.routers import climate, health, intelligence, analytics
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -48,6 +48,8 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Include routers
 app.include_router(health.router)
 app.include_router(climate.router)
+app.include_router(intelligence.router)
+app.include_router(analytics.router)
 
 
 @app.on_event("startup")
