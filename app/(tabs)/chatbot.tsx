@@ -8,7 +8,7 @@ import { ArrowLeft, Send, Bot, User } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
 
-const GEMINI_API_KEY = 'AIzaSyAMBDkDMSIEAN8rHlLX5M27kE1cPKOM4FM';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 // ── System instruction injected at the start of every conversation ─────────
