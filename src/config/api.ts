@@ -4,11 +4,11 @@
  */
 
 // For local development
-export const API_BASE_URL = 'http://192.168.31.205:8000';
+// export const API_BASE_URL = 'http://192.168.31.205:8000';
 
 // For production (Render deployment)
 // Replace with your actual Render URL after deployment
-// export const API_BASE_URL = 'https://krishisakhi-n4zi.onrender.com';
+export const API_BASE_URL = 'https://krishisakhi-n4zi.onrender.com';
 
 // API Endpoints
 export const API_ENDPOINTS = {
