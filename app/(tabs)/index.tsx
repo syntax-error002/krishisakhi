@@ -3,9 +3,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CloudRain, CloudSun, Sprout, TrendingUp, Handshake, Users, Landmark, ChevronRight } from 'lucide-react-native';
 import { theme } from '../../src/theme';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { userProfile } = useAuth();
+
+  const displayName = userProfile?.name || 'Farmer';
+  const initials = displayName.substring(0, 2).toUpperCase();
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -13,11 +18,11 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Good Morning,</Text>
-          <Text style={styles.username}>Ramesh Kumar</Text>
+          <Text style={styles.username}>{displayName}</Text>
         </View>
-        <View style={styles.profileBadge}>
-          <Text style={styles.profileInitials}>RK</Text>
-        </View>
+        <TouchableOpacity style={styles.profileBadge} onPress={() => router.push('/profile' as any)}>
+          <Text style={styles.profileInitials}>{initials}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Weather Widget */}
