@@ -1,2 +1,0 @@
-"""Krishi Mitra Backend Application."""
-

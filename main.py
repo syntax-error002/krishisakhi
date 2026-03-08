@@ -1,65 +1,87 @@
-"""Main application entry point."""
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import get_settings
-from app.core.logging_config import setup_logging
-from app.middleware.error_handler import (
-    validation_exception_handler,
-    http_exception_handler,
-    general_exception_handler,
-)
-from app.routers import climate, health, intelligence, analytics
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from pydantic import BaseModel
+from typing import List, Optional
 
-# Setup logging first
-setup_logging()
-import logging
+from rotation_engine import get_rotation_recommendation
 
-logger = logging.getLogger(__name__)
-
-# Get settings
-settings = get_settings()
-
-# Create FastAPI app
 app = FastAPI(
-    title=settings.app_name,
-    description="Backend services for the Krishi Mitra AI farming app.",
-    version=settings.app_version,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    title="Krishi Mitra — Crop Rotation AI",
+    description="Scientifically-grounded crop rotation recommendations using soil nutrient modelling and multi-factor scoring.",
+    version="2.0.0"
 )
 
-# Configure CORS
+# Allow all origins for the mobile app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_cors_origins(),
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Register exception handlers
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(Exception, general_exception_handler)
 
-# Include routers
-app.include_router(health.router)
-app.include_router(climate.router)
-app.include_router(intelligence.router)
-app.include_router(analytics.router)
+# ── Request / Response Models ──────────────────────────────────────────────────
+
+class RotationRequest(BaseModel):
+    recentSeasons: List[str]           # Crop names, oldest first
+    farmSize: Optional[float] = 2.0   # Acres
+    location: Optional[str] = None    # e.g. "Pune, MH"
+    scenario: Optional[str] = None    # "drought" | "flood" | None
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup event."""
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Debug mode: {settings.debug}")
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "Krishi Mitra Crop Rotation AI", "version": "2.0.0"}
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown event."""
-    logger.info("Shutting down application")
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
+@app.post("/api/rotation/recommend")
+def recommend_rotation(req: RotationRequest):
+    """
+    Run the Crop Rotation AI engine.
+    
+    Body:
+    - recentSeasons: list of crop names grown in recent seasons, oldest first
+    - farmSize: farm size in acres (default 2.0)
+    - location: optional location string for context
+    - scenario: optional "drought" or "flood" climate stress
+    
+    Returns a full rotation analysis with soil state, 2-season plan and alternatives.
+    """
+    if not req.recentSeasons:
+        raise HTTPException(status_code=400, detail="recentSeasons cannot be empty.")
+    
+    result = get_rotation_recommendation(
+        history=req.recentSeasons,
+        farm_size_acres=req.farmSize or 2.0,
+        scenario=req.scenario,
+        location=req.location
+    )
+    return result
+
+
+@app.get("/api/crops")
+def list_crops():
+    """Return the list of all crops supported by the AI engine."""
+    from rotation_engine import CROP_DB
+    return {
+        "crops": [
+            {
+                "name": k.replace("_", " ").title(),
+                "key": k,
+                "family": v["family"],
+                "season": v["season"],
+                "yieldPerAcre": v["yield_per_acre"],
+                "pricePerKg": v["price_per_kg"],
+                "waterNeed": v["water_need"],
+                "droughtTolerant": v["drought_tolerant"],
+            }
+            for k, v in CROP_DB.items()
+        ]
+    }
